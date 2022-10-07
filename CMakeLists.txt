@@ -1,7 +1,15 @@
+message("* * * * * * * * * * * * * * * * *")
+message("*   _____    _______    _____   *")
+message("*  / ____|  |__   __|  |  __ \\  *")
+message("* | |          | |     | |__) | *")
+message("* | |          | |     |  ___/  *")
+message("* | |____      | |     | |      *")
+message("*  \\_____|     |_|     |_|      *")
+message("* * * * * * * * * * * * * * * * *")
 
 cmake_minimum_required(VERSION 3.2.5)
 
-project(CThreadPool VERSION 1.0.0)
+project(CThreadPool VERSION 1.0.1)
 
 set(CMAKE_CXX_STANDARD 14)
 

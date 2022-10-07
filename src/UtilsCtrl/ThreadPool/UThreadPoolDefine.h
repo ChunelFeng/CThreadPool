@@ -52,7 +52,8 @@ static const int CGRAPH_LONG_TIME_TASK_STRATEGY = -101;                         
 /**
  * 以下为线程池配置信息
  */
-static const int CGRAPH_DEFAULT_THREAD_SIZE = (CGRAPH_CPU_NUM > 0) ? CGRAPH_CPU_NUM : 8;    // 默认主线程个数
+static const int CGRAPH_DEFAULT_THREAD_SIZE = 8;                                            // 默认主线程个数
+static const int CGRAPH_SECONDARY_THREAD_SIZE = 0;                                          // 默认开启辅助线程个数
 static const int CGRAPH_MAX_THREAD_SIZE = (CGRAPH_DEFAULT_THREAD_SIZE * 2) + 1;             // 最大线程个数
     #ifndef _WIN32
 static const int CGRAPH_MAX_TASK_STEAL_RANGE = 2;                                           // 盗取机制相邻范围
