@@ -14,7 +14,7 @@
 #endif
 
 #include <mutex>
-#include <memory>
+#include "UMemory.h"
 
 CGRAPH_NAMESPACE_BEGIN
 
@@ -31,7 +31,7 @@ public:
      * @return
      */
     template<typename T,
-            std::enable_if_t<std::is_base_of<CObject, T>::value, int> = 0>
+            enable_if_t<std::is_base_of<CObject, T>::value, int> = 0>
     static T* safeMallocCObject() {
         T* ptr = nullptr;
         while (!ptr) {
@@ -47,9 +47,9 @@ public:
      * @return
      */
     template<typename T,
-            std::enable_if_t<std::is_base_of<CObject, T>::value, int> = 0>
+            enable_if_t<std::is_base_of<CObject, T>::value, int> = 0>
     static std::unique_ptr<T> makeUniqueCObject() {
-        return std::make_unique<T>();
+        return make_unique<T>();
     }
 
 

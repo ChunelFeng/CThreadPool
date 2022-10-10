@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.2.5)
 
 project(CThreadPool VERSION 1.0.1)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 11)
 
 # add CThreadPool environment info
 include(cmake/CThreadPool-env-include.cmake)
