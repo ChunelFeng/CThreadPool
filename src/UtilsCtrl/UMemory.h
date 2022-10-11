@@ -1,59 +1,54 @@
-/*
- * @Author: chenjingyu
- * @Date: 2022-10-11 01:43:58
- * @LastEditTime: 2022-10-11 02:32:15
- * @Description: Memory operator
- * @FilePath: /CThreadPool/src/UtilsCtrl/UMemory.h
- */
+/***************************
+@Author: MirrorYuChen
+@Contact: 2458006366@qq.com
+@File: UMemory.h
+@Time: 2022/10/11 01:43 上午
+@Desc:
+***************************/
+
 #ifndef CGRAPH_UMEMORY_H
 #define CGRAPH_UMEMORY_H
 
 #include <memory>
 #include <type_traits>
+
 #include "../CBasic/CBasicInclude.h"
 
 CGRAPH_NAMESPACE_BEGIN
 
-template <bool B, typename T = void>
+template<bool B, typename T = void>
 using enable_if_t = typename std::enable_if<B, T>::type;
 
-template <typename T>
-std::unique_ptr<T> WrapUnique(T* ptr) {
-  static_assert(!std::is_array<T>::value, "array types are unsupported");
-  static_assert(std::is_object<T>::value, "non-object types are unsupported");
-  return std::unique_ptr<T>(ptr);
-}
-
-// Traits to select proper overload and return type for `absl::make_unique<>`.
-template <typename T>
+template<typename T>
 struct MakeUniqueResult {
-  using scalar = std::unique_ptr<T>;
+    using scalar = std::unique_ptr<T>;
 };
-template <typename T>
+
+template<typename T>
 struct MakeUniqueResult<T[]> {
-  using array = std::unique_ptr<T[]>;
+    using array = std::unique_ptr<T[]>;
 };
-template <typename T, size_t N>
+
+template<typename T, size_t N>
 struct MakeUniqueResult<T[N]> {
-  using invalid = void;
+    using invalid = void;
 };
 
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 typename MakeUniqueResult<T>::scalar make_unique(
-  Args&&... args) {
-  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+        Args &&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
-template <typename T>
+template<typename T>
 typename MakeUniqueResult<T>::array make_unique(size_t n) {
-  return std::unique_ptr<T>(new typename std::remove_extent<T>[n]());
+    return std::unique_ptr<T>(new typename std::remove_extent<T>[n]());
 }
 
-template <typename T, typename... Args>
+template<typename T, typename... Args>
 typename MakeUniqueResult<T>::invalid make_unique(
-    Args&&... /* args */) = delete;
+        Args &&... /* args */) = delete;
 
 CGRAPH_NAMESPACE_END
-
 
 #endif // CGRAPH_UMEMORY_H

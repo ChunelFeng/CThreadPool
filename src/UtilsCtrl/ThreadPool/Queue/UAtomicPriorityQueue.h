@@ -12,7 +12,6 @@
 #include <queue>
 
 #include "UQueueObject.h"
-#include "../../UMemory.h"
 
 CGRAPH_NAMESPACE_BEGIN
 

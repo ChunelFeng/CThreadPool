@@ -14,8 +14,6 @@
 #include <queue>
 #include <condition_variable>
 
-#include "../UThreadPoolDefine.h"
-#include "../../UMemory.h"
 #include "UQueueObject.h"
 
 CGRAPH_NAMESPACE_BEGIN

@@ -21,7 +21,7 @@
 在开发过程中，也沉淀了详细的说明文档（见下方 <b>推荐阅读</b>），以便于大家快速了解代码和思路，也请大家不吝指教。
 
 ## 二. 编译说明
-* 本工程支持MacOS、Linux和Windows系统，无任何第三方依赖。推荐使用C++14（默认）或以上版本，不支持C++11或以下版本
+* 本工程支持MacOS、Linux和Windows系统，无任何第三方依赖。推荐使用C++11（默认）或以上版本，不支持以下C++11以下版本
 
 * 使用`CLion`或使用`Visual Studio 15`(或以上版本)作为IDE的开发者，打开`CMakeLists.txt`文件作为工程，即可编译通过
 
@@ -44,7 +44,7 @@ float add_by_5(float i) {
     return i + 5.0f;
 }
 
-void tutorial() {
+int main() {
     UThreadPool tp;
     int i = 6, j = 3;
     auto r1 = tp.commit([i, j] { return i - j; });
@@ -52,6 +52,7 @@ void tutorial() {
 
     std::cout << r1.get() << std::endl;
     std::cout << r2.get() << std::endl;
+    return 0;
 }
 ```
 更多使用方法，请参考 `tutorial.cpp` 中的例子和文档中的内容。
@@ -75,6 +76,9 @@ void tutorial() {
 
 [2022.10.07 - v1.0.1 - Chunel]
 * 提供默认开启辅助线程的配置
+
+[2022.10.11 - v1.1.0 - [MirrorYuChen](https://github.com/MirrorYuChen)]
+* 提供针对C++11版本的支持
 
 ------------
 #### 附录-2. 联系方式

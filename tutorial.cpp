@@ -7,7 +7,6 @@
 ***************************/
 
 #include "src/CThreadPool.h"
-#include "src/UtilsCtrl/UMemory.h"
 
 #include "MyFunction.h"
 

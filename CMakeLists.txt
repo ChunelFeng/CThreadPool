@@ -9,7 +9,7 @@ message("* * * * * * * * * * * * * * * * *")
 
 cmake_minimum_required(VERSION 3.2.5)
 
-project(CThreadPool VERSION 1.0.1)
+project(CThreadPool VERSION 1.1.0)
 
 set(CMAKE_CXX_STANDARD 11)
 

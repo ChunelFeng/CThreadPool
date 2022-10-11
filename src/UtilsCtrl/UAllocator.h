@@ -12,8 +12,8 @@
 #ifdef _GENERATE_SESSION_
     #include <uuid/uuid.h>
 #endif
-
 #include <mutex>
+
 #include "UMemory.h"
 
 CGRAPH_NAMESPACE_BEGIN
@@ -31,7 +31,7 @@ public:
      * @return
      */
     template<typename T,
-            enable_if_t<std::is_base_of<CObject, T>::value, int> = 0>
+            CTP::enable_if_t<std::is_base_of<CObject, T>::value, int> = 0>
     static T* safeMallocCObject() {
         T* ptr = nullptr;
         while (!ptr) {
@@ -47,9 +47,9 @@ public:
      * @return
      */
     template<typename T,
-            enable_if_t<std::is_base_of<CObject, T>::value, int> = 0>
+            CTP::enable_if_t<std::is_base_of<CObject, T>::value, int> = 0>
     static std::unique_ptr<T> makeUniqueCObject() {
-        return make_unique<T>();
+        return CTP::make_unique<T>();
     }
 
 
