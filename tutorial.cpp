@@ -7,6 +7,7 @@
 ***************************/
 
 #include "src/CThreadPool.h"
+#include "src/UtilsCtrl/UMemory.h"
 
 #include "MyFunction.h"
 
@@ -123,7 +124,7 @@ void tutorial_threadpool_3(UThreadPoolPtr tp) {
 
 
 int main() {
-    auto pool = std::make_unique<UThreadPool>();    // 构造一个线程池类的智能指针
+    auto pool = make_unique<UThreadPool>();    // 构造一个线程池类的智能指针
     CGRAPH_ECHO("======== tutorial_threadpool_1 begin. ========");
     tutorial_threadpool_1(pool.get());
 

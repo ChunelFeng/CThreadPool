@@ -12,6 +12,7 @@
 #include <queue>
 
 #include "UQueueObject.h"
+#include "../../UMemory.h"
 
 CGRAPH_NAMESPACE_BEGIN
 
@@ -64,7 +65,7 @@ public:
      * @return
      */
     CVoid push(T&& value, int priority) {
-        std::unique_ptr<T> task(std::make_unique<T>(std::move(value), priority));
+        std::unique_ptr<T> task(make_unique<T>(std::move(value), priority));
         CGRAPH_LOCK_GUARD lk(mutex_);
         priority_queue_.push(std::move(task));
     }
