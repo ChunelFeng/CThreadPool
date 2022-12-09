@@ -10,7 +10,7 @@
 </h1>
 
 ## 一. 简介
-`CThreadPool` 是一个跨平台的、无任何三方依赖的、高性能的C++14（含以上版本）版本的线程池，也是 [CGraph](https://github.com/ChunelFeng/CGraph) 项目中使用的跨平台线程池组件功能的最小集。
+`CThreadPool` 是一个跨平台的、无任何三方依赖的、高性能的C++11（含以上版本）版本的线程池，也是 [CGraph](https://github.com/ChunelFeng/CGraph) 项目中使用的跨平台线程池组件功能的最小集。
 
 经过CGraph和关联项目的长期迭代和验证，功能已经趋于稳定，且性能优异。因为咨询相关内容的朋友较多，故做为独立的仓库提供出来，方便大家使用。
 
