@@ -123,7 +123,7 @@ void tutorial_threadpool_3(UThreadPoolPtr tp) {
 
 
 int main() {
-    auto pool = make_unique<UThreadPool>();    // 构造一个线程池类的智能指针
+    std::unique_ptr<UThreadPool> pool(new UThreadPool());    // 构造一个线程池类的智能指针
     CGRAPH_ECHO("======== tutorial_threadpool_1 begin. ========");
     tutorial_threadpool_1(pool.get());
 

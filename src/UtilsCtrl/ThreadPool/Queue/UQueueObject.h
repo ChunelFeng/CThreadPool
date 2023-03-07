@@ -11,7 +11,6 @@
 
 #include <mutex>
 
-#include "../UThreadPoolDefine.h"
 #include "../UThreadObject.h"
 
 CGRAPH_NAMESPACE_BEGIN

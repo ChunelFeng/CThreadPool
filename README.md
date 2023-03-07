@@ -80,6 +80,9 @@ int main() {
 [2022.10.11 - v1.1.0 - [MirrorYuChen](https://github.com/MirrorYuChen)]
 * 提供针对C++11版本的支持
 
+[2023.03.07 - v1.2.0 - Chunel]
+* 优化windows版本功能
+
 ------------
 #### 附录-2. 联系方式
 * 微信： ChunelFeng

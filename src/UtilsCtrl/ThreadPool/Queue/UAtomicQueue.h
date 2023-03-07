@@ -14,6 +14,7 @@
 #include <queue>
 #include <condition_variable>
 
+#include "../UThreadPoolDefine.h"
 #include "UQueueObject.h"
 
 CGRAPH_NAMESPACE_BEGIN
@@ -103,7 +104,7 @@ public:
      * @param value
      */
     CVoid push(T&& value) {
-        std::unique_ptr<T> task(make_unique<T>(std::move(value)));
+        std::unique_ptr<T> task(c_make_unique<T>(std::move(value)));
         CGRAPH_LOCK_GUARD lk(mutex_);
         queue_.push(std::move(task));
         cv_.notify_one();
