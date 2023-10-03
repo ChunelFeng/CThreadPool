@@ -11,6 +11,7 @@
 
 #include <vector>
 #include <atomic>
+#include <chrono>
 
 #include "UQueueObject.h"
 
@@ -46,21 +47,32 @@ public:
      * 获取容量信息
      * @return
      */
-    [[nodiscard]] CUint getCapacity() const {
+    CUint getCapacity() const {
         return capacity_;
     }
 
     /**
      * 写入信息
+     * @tparam TImpl
      * @param value
+     * @param strategy
      * @return
      */
     template<class TImpl = T>
-    CVoid push(const TImpl& value) {
+    CVoid push(const TImpl& value, URingBufferPushStrategy strategy) {
         {
             CGRAPH_UNIQUE_LOCK lk(mutex_);
             if (isFull()) {
-                push_cv_.wait(lk, [this] { return !isFull(); });
+                switch (strategy) {
+                    case URingBufferPushStrategy::WAIT:
+                        push_cv_.wait(lk, [this] { return !isFull(); });
+                        break;
+                    case URingBufferPushStrategy::REPLACE:
+                        head_ = (head_ + 1) % capacity_;
+                        break;
+                    case URingBufferPushStrategy::DROP:
+                        return;    // 直接返回，不写入即可
+                }
             }
 
             ring_buffer_queue_[tail_] = std::move(c_make_unique<TImpl>(value));
@@ -70,23 +82,88 @@ public:
     }
 
     /**
-     * 等待弹出信息
+     * 写入智能指针类型的信息
+     * @tparam TImpl
      * @param value
+     * @param strategy
      * @return
      */
     template<class TImpl = T>
-    CVoid waitPop(TImpl& value) {
+    CVoid push(std::unique_ptr<TImpl>& value, URingBufferPushStrategy strategy) {
         {
             CGRAPH_UNIQUE_LOCK lk(mutex_);
-            if (isEmpty()) {
-                pop_cv_.wait(lk, [this] { return !isEmpty(); });
+            if (isFull()) {
+                switch (strategy) {
+                    case URingBufferPushStrategy::WAIT:
+                        push_cv_.wait(lk, [this] { return !isFull(); });
+                        break;
+                    case URingBufferPushStrategy::REPLACE:
+                        head_ = (head_ + 1) % capacity_;
+                        break;
+                    case URingBufferPushStrategy::DROP:
+                        return;    // 直接返回，不写入即可
+                }
             }
 
-            value = (*ring_buffer_queue_[head_]);
-            *ring_buffer_queue_[head_] = {};
+            ring_buffer_queue_[tail_] = std::move(value);
+            tail_ = (tail_ + 1) % capacity_;
+        }
+        pop_cv_.notify_one();
+    }
+
+    /**
+     * 等待弹出信息
+     * @param value
+     * @param timeout
+     * @return
+     */
+    template<class TImpl = T>
+    CStatus waitPopWithTimeout(TImpl& value, CMSec timeout) {
+        CGRAPH_FUNCTION_BEGIN
+        {
+            CGRAPH_UNIQUE_LOCK lk(mutex_);
+            if (isEmpty()
+                && !pop_cv_.wait_for(lk, std::chrono::milliseconds(timeout),
+                                     [this] { return !isEmpty(); })) {
+                // 如果timeout的时间内，等不到消息，则返回错误信息
+                CGRAPH_RETURN_ERROR_STATUS("receive message timeout.")
+            }
+
+            value = *ring_buffer_queue_[head_];    // 这里直接进行值copy
             head_ = (head_ + 1) % capacity_;
         }
         push_cv_.notify_one();
+        CGRAPH_FUNCTION_END
+    }
+
+    /**
+     * 等待弹出信息。ps：当入参为智能指针的情况
+     * @tparam TImpl
+     * @param value
+     * @param timeout
+     * @return
+     */
+    template<class TImpl = T>
+    CStatus waitPopWithTimeout(std::unique_ptr<TImpl>& value, CMSec timeout) {
+        CGRAPH_FUNCTION_BEGIN
+        {
+            CGRAPH_UNIQUE_LOCK lk(mutex_);
+            if (isEmpty()
+                && !pop_cv_.wait_for(lk, std::chrono::milliseconds(timeout),
+                                     [this] { return !isEmpty(); })) {
+                // 如果timeout的时间内，等不到消息，则返回错误信息
+                CGRAPH_RETURN_ERROR_STATUS("receive message timeout.")
+            }
+
+            /**
+             * 当传入的内容，是智能指针的时候，
+             * 这里就直接通过 move转移过去好了，跟直接传值的方式，保持区别
+             */
+            value = std::move(ring_buffer_queue_[head_]);
+            head_ = (head_ + 1) % capacity_;
+        }
+        push_cv_.notify_one();
+        CGRAPH_FUNCTION_END
     }
 
     /**
@@ -102,11 +179,19 @@ public:
     }
 
 protected:
+    /**
+     * 当前队列是否为满
+     * @return
+     */
     CBool isFull() {
         // 空出来一个位置，这个时候不让 tail写入
         return head_ == (tail_ + 1) % capacity_;
     }
 
+    /**
+     * 当前队列是否为空
+     * @return
+     */
     CBool isEmpty() {
         return head_ == tail_;
     }

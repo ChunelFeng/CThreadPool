@@ -24,7 +24,7 @@ auto UThreadPool::commit(const FunctionType& func, CIndex index)
     CIndex realIndex = dispatch(index);
     if (realIndex >= 0 && realIndex < config_.default_thread_size_) {
         // 如果返回的结果，在主线程数量之间，则放到主线程的queue中执行
-        primary_threads_[realIndex]->work_stealing_queue_.push(std::move(task));
+        primary_threads_[realIndex]->pushTask(std::move(task));
     } else if (CGRAPH_LONG_TIME_TASK_STRATEGY == realIndex) {
         /**
          * 如果是长时间任务，则交给特定的任务队列，仅由辅助线程处理
@@ -36,7 +36,6 @@ auto UThreadPool::commit(const FunctionType& func, CIndex index)
         // 返回其他结果，放到pool的queue中执行
         task_queue_.push(std::move(task));
     }
-    input_task_num_++;    // 计数
     return result;
 }
 
@@ -54,7 +53,6 @@ auto UThreadPool::commitWithPriority(const FunctionType& func, int priority)
     }
 
     priority_task_queue_.push(std::move(task), priority);
-    input_task_num_++;
     return result;
 }
 

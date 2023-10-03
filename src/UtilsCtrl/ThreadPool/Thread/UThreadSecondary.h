@@ -47,9 +47,7 @@ protected:
                               UThreadPoolConfigPtr config) {
         CGRAPH_FUNCTION_BEGIN
         CGRAPH_ASSERT_INIT(false)    // 初始化之前，设置参数
-        CGRAPH_ASSERT_NOT_NULL(poolTaskQueue)
-        CGRAPH_ASSERT_NOT_NULL(poolPriorityTaskQueue)
-        CGRAPH_ASSERT_NOT_NULL(config)
+        CGRAPH_ASSERT_NOT_NULL(poolTaskQueue, poolPriorityTaskQueue, config)
 
         this->pool_task_queue_ = poolTaskQueue;
         this->pool_priority_task_queue_ = poolPriorityTaskQueue;
@@ -61,44 +59,43 @@ protected:
     CStatus run() override {
         CGRAPH_FUNCTION_BEGIN
         CGRAPH_ASSERT_INIT(true)
-        CGRAPH_ASSERT_NOT_NULL(config_)
 
-        if (config_->calcBatchTaskRatio()) {
-            while (done_) {
-                processTasks();    // 批量任务获取执行接口
-            }
-        } else {
-            while (done_) {
-                processTask();    // 单个任务获取执行接口
-            }
-        }
-
+        status = loopProcess();
         CGRAPH_FUNCTION_END
     }
 
 
-    /**
-     * 任务执行函数，从线程池的任务队列中获取信息
-     */
-    CVoid processTask() {
+    CVoid processTask() override {
         UTask task;
         if (popPoolTask(task)) {
             runTask(task);
         } else {
-            std::this_thread::yield();
+            // 如果单词无法获取，则稍加等待
+            waitRunTask(config_->queue_emtpy_interval_);
+        }
+    }
+
+
+    CVoid processTasks() override {
+        UTaskArr tasks;
+        if (popPoolTask(tasks)) {
+            runTasks(tasks);
+        } else {
+            waitRunTask(config_->queue_emtpy_interval_);
         }
     }
 
 
     /**
-     * 批量执行n个任务
+     * 有等待的执行任务
+     * @param ms
+     * @return
+     * @notice 目的是降低cpu的占用率
      */
-    CVoid processTasks() {
-        UTaskArr tasks;
-        if (popPoolTask(tasks)) {
-            runTasks(tasks);
-        } else {
-            std::this_thread::yield();
+    CVoid waitRunTask(CMSec ms) {
+        auto task = this->pool_task_queue_->popWithTimeout(ms);
+        if (nullptr != task) {
+            (*task)();
         }
     }
 
@@ -115,7 +112,7 @@ protected:
             cur_ttl_--;    // 如果当前线程没有在执行，则ttl-1
         }
 
-        return cur_ttl_ <= 0;
+        return cur_ttl_ <= 0 && done_;    // 必须是正在执行的线程，才可以被回收
     }
 
 private:

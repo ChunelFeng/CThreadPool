@@ -42,13 +42,17 @@ public:
      * @return
      */
     CBool tryPop(T& value) {
-        CGRAPH_LOCK_GUARD lk(mutex_);
-        if (queue_.empty()) {
-            return false;
+        CBool result = false;
+        if (mutex_.try_lock()) {
+            if (!queue_.empty()) {
+                value = std::move(*queue_.front());
+                queue_.pop();
+                result = true;
+            }
+            mutex_.unlock();
         }
-        value = std::move(*queue_.front());
-        queue_.pop();
-        return true;
+
+        return result;
     }
 
 
@@ -59,17 +63,17 @@ public:
      * @return
      */
     CBool tryPop(std::vector<T>& values, int maxPoolBatchSize) {
-        CGRAPH_LOCK_GUARD lk(mutex_);
-        if (queue_.empty() || maxPoolBatchSize <= 0) {
-            return false;
+        CBool result = false;
+        if (mutex_.try_lock()) {
+            while (!queue_.empty() && maxPoolBatchSize-- > 0) {
+                values.emplace_back(std::move(*queue_.front()));
+                queue_.pop();
+                result = true;
+            }
+            mutex_.unlock();
         }
 
-        while (!queue_.empty() && maxPoolBatchSize--) {
-            values.emplace_back(std::move(*queue_.front()));
-            queue_.pop();
-        }
-
-        return true;
+        return result;
     }
 
 
@@ -77,11 +81,14 @@ public:
      * 阻塞式等待弹出
      * @return
      */
-    std::unique_ptr<T> waitPop() {
+    std::unique_ptr<T> popWithTimeout(CMSec ms) {
         CGRAPH_UNIQUE_LOCK lk(mutex_);
-        cv_.wait(lk, [this] { return !queue_.empty(); });
+        if (!cv_.wait_for(lk, std::chrono::milliseconds(ms), [this] { return !queue_.empty(); })) {
+            return nullptr;
+        }
+
         std::unique_ptr<T> result = std::move(queue_.front());
-        queue_.pop();
+        queue_.pop();    // 如果等成功了，则弹出一个信息
         return result;
     }
 
@@ -104,9 +111,17 @@ public:
      * @param value
      */
     CVoid push(T&& value) {
-        std::unique_ptr<T> task(c_make_unique<T>(std::move(value)));
-        CGRAPH_LOCK_GUARD lk(mutex_);
-        queue_.push(std::move(task));
+        std::unique_ptr<typename std::remove_reference<T>::type>     \
+                task(c_make_unique<typename std::remove_reference<T>::type>(std::forward<T>(value)));
+        while (true) {
+            if (mutex_.try_lock()) {
+                queue_.push(std::move(task));
+                mutex_.unlock();
+                break;
+            } else {
+                std::this_thread::yield();
+            }
+        }
         cv_.notify_one();
     }
 
@@ -115,7 +130,7 @@ public:
      * 判定队列是否为空
      * @return
      */
-    [[nodiscard]] CBool empty() {
+    CBool empty() {
         CGRAPH_LOCK_GUARD lk(mutex_);
         return queue_.empty();
     }

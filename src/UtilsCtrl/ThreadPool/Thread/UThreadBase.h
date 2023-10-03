@@ -3,7 +3,7 @@
 @Contact: chunel@foxmail.com
 @File: UThreadBase.h
 @Time: 2021/7/2 11:24 下午
-@Desc: 
+@Desc:
 ***************************/
 
 #ifndef CGRAPH_UTHREADBASE_H
@@ -118,6 +118,40 @@ protected:
         total_task_num_ = 0;
     }
 
+    /**
+     * 执行单个消息
+     * @return
+     */
+    virtual CVoid processTask() = 0;
+
+
+    /**
+     * 获取批量执行task信息
+     */
+    virtual CVoid processTasks() = 0;
+
+
+    /**
+     * 循环处理任务
+     * @return
+     */
+    CStatus loopProcess() {
+        CGRAPH_FUNCTION_BEGIN
+        CGRAPH_ASSERT_NOT_NULL(config_)
+
+        if (config_->batch_task_enable_) {
+            while (done_) {
+                processTasks();    // 批量任务获取执行接口
+            }
+        } else {
+            while (done_) {
+                processTask();    // 单个任务获取执行接口
+            }
+        }
+
+        CGRAPH_FUNCTION_END
+    }
+
 
     /**
     * 设置线程优先级，仅针对非windows平台使用
@@ -138,7 +172,7 @@ protected:
         sched_param param = { calcPriority(priority) };
         int ret = pthread_setschedparam(handle, calcPolicy(policy), &param);
         if (0 != ret) {
-            CGRAPH_ECHO("warning : set thread sched param failed, error code is [%d]", ret);
+            CGRAPH_ECHO("warning : set thread sched param failed, system error code is [%d]", ret);
         }
 #endif
     }
@@ -147,7 +181,7 @@ protected:
      * 设置线程亲和性，仅针对linux系统
      */
     CVoid setAffinity(int index) {
-#ifdef __linux__
+#if defined(__linux__) && !defined(__ANDROID__)
         if (!config_->bind_cpu_enable_ || CGRAPH_CPU_NUM == 0 || index < 0) {
             return;
         }
@@ -159,7 +193,7 @@ protected:
         auto handle = thread_.native_handle();
         int ret = pthread_setaffinity_np(handle, sizeof(cpu_set_t), &mask);
         if (0 != ret) {
-            CGRAPH_ECHO("warning : set thread affinity failed, error code is [%d]", ret);
+            CGRAPH_ECHO("warning : set thread affinity failed, system error code is [%d]", ret);
         }
 #endif
     }
@@ -172,7 +206,7 @@ private:
      * @param policy
      * @return
      */
-    [[nodiscard]] static int calcPolicy(int policy) {
+    static int calcPolicy(int policy) {
         return (CGRAPH_THREAD_SCHED_OTHER == policy
                 || CGRAPH_THREAD_SCHED_RR == policy
                 || CGRAPH_THREAD_SCHED_FIFO == policy)
@@ -186,7 +220,7 @@ private:
      * @param priority
      * @return
      */
-    [[nodiscard]] static int calcPriority(int priority) {
+    static int calcPriority(int priority) {
         return (priority >= CGRAPH_THREAD_MIN_PRIORITY
                 && priority <= CGRAPH_THREAD_MAX_PRIORITY)
                ? priority : CGRAPH_THREAD_MIN_PRIORITY;

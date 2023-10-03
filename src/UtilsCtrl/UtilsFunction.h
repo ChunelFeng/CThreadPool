@@ -11,6 +11,7 @@
 
 #include <mutex>
 #include <chrono>
+#include <iomanip>
 #include <ctime>
 #include <cstdarg>
 #include <algorithm>
@@ -32,34 +33,39 @@ inline CVoid CGRAPH_ECHO(const char *cmd, ...) {
 #endif
 
     std::lock_guard<std::mutex> lock{ g_echo_mtx };
-#ifndef _WIN32
-    // 非windows系统，打印到毫秒
     auto now = std::chrono::system_clock::now();
-    // 通过不同精度获取相差的毫秒数
-    uint64_t disMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count()
-                     - std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count() * 1000;
-    time_t tt = std::chrono::system_clock::to_time_t(now);
-    auto localTime = localtime(&tt);
-    char strTime[32] = { 0 };
-    sprintf(strTime, "[%04d-%02d-%02d %02d:%02d:%02d.%03d]", localTime->tm_year + 1900,
-            localTime->tm_mon + 1, localTime->tm_mday, localTime->tm_hour,
-            localTime->tm_min, localTime->tm_sec, (int)disMs);
-    std::cout << "[CGraph] " << strTime << " ";
-#else
-    // windows系统，打印到秒
-    time_t curTime;
-    time(&curTime);
-    std::string ct = ctime(&curTime);
-    std::cout << "[CGraph] ["
-              << ct.assign(ct.begin(), ct.end()-1)    // 去掉时间的最后一位\n信息
-              << "] ";
-#endif
+    auto time = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
+    std::cout << "[" << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S.")    \
+        << std::setfill('0') << std::setw(3) << ms << "] ";
 
     va_list args;
     va_start(args, cmd);
     vprintf(cmd, args);
     va_end(args);
     std::cout << "\n";
+}
+
+
+/**
+ * 获取当前的ms信息
+ * @return
+ */
+inline CMSec CGRAPH_GET_CURRENT_MS() {
+    // 获取当前的时间戳信息
+    return (CMSec)std::chrono::time_point_cast<std::chrono::milliseconds>    \
+        (std::chrono::steady_clock::now()).time_since_epoch().count();
+}
+
+
+/**
+ * 获取当前的ms信息(包含小数)
+ * @return
+ */
+inline CFMSec CGRAPH_GET_CURRENT_ACCURATE_MS() {
+    // 获取当前的时间戳信息
+    return (CFMSec)std::chrono::time_point_cast<std::chrono::microseconds>    \
+                (std::chrono::steady_clock::now()).time_since_epoch().count() / (CFMSec)1000.0;
 }
 
 

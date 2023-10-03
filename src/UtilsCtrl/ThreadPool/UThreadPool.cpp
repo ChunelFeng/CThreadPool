@@ -13,15 +13,7 @@ CGRAPH_NAMESPACE_BEGIN
 UThreadPool::UThreadPool(CBool autoInit, const UThreadPoolConfig& config) noexcept {
     cur_index_ = 0;
     is_init_ = false;
-    input_task_num_ = 0;
     this->setConfig(config);    // setConfig 函数，用在 is_init_ 设定之后
-    is_monitor_ = config_.monitor_enable_;        /** 根据参数设定，决定是否开启监控线程。默认开启 */
-    /**
-     * CGraph 本身支持跨平台运行
-     * 如果在windows平台上，通过Visual Studio(2017版本或以下) 版本，将 UThreadPool 类封装程.dll文件时，遇到无法启动的问题
-     * 请参考此链接：https://github.com/ChunelFeng/CGraph/issues/17
-     */
-    monitor_thread_ = std::move(std::thread(&UThreadPool::monitor, this));
     if (autoInit) {
         this->init();
     }
@@ -29,7 +21,7 @@ UThreadPool::UThreadPool(CBool autoInit, const UThreadPoolConfig& config) noexce
 
 
 UThreadPool::~UThreadPool() {
-    is_monitor_ = false;    // 在析构的时候，才释放监控线程。先释放监控线程，再释放其他的线程
+    this->config_.monitor_enable_ = false;    // 在析构的时候，才释放监控线程。先释放监控线程，再释放其他的线程
     if (monitor_thread_.joinable()) {
         monitor_thread_.join();
     }
@@ -53,6 +45,7 @@ CStatus UThreadPool::init() {
         CGRAPH_FUNCTION_END
     }
 
+    monitor_thread_ = std::move(std::thread(&UThreadPool::monitor, this));
     thread_record_map_.clear();
     primary_threads_.reserve(config_.default_thread_size_);
     for (int i = 0; i < config_.default_thread_size_; i++) {
@@ -89,16 +82,16 @@ CStatus UThreadPool::submit(const UTaskGroup& taskGroup, CMSec ttl) {
     }
 
     // 计算最终运行时间信息
-    auto deadline = std::chrono::system_clock::now()
+    auto deadline = std::chrono::steady_clock::now()
                     + std::chrono::milliseconds(std::min(taskGroup.getTtl(), ttl));
 
     for (auto& fut : futures) {
         const auto& futStatus = fut.wait_until(deadline);
         switch (futStatus) {
             case std::future_status::ready: break;    // 正常情况，直接返回了
-            case std::future_status::timeout: status += CStatus("thread status timeout"); break;
-            case std::future_status::deferred: status += CStatus("thread status deferred"); break;
-            default: status += CStatus("thread status unknown");
+            case std::future_status::timeout: status += CErrStatus("thread status timeout"); break;
+            case std::future_status::deferred: status += CErrStatus("thread status deferred"); break;
+            default: status += CErrStatus("thread status unknown");
         }
     }
 
@@ -116,7 +109,7 @@ CStatus UThreadPool::submit(CGRAPH_DEFAULT_CONST_FUNCTION_REF func, CMSec ttl,
 }
 
 
-CIndex UThreadPool::getThreadNum(CSize tid) {
+CIndex UThreadPool::getThreadIndex(CSize tid) {
     int threadNum = CGRAPH_SECONDARY_THREAD_COMMON_ID;
     auto result = thread_record_map_.find(tid);
     if (result != thread_record_map_.end()) {
@@ -164,11 +157,35 @@ CStatus UThreadPool::destroy() {
 }
 
 
-CIndex UThreadPool::dispatch(CIndex origIndex) {
-    if (unlikely(config_.fair_lock_enable_)) {
-        return CGRAPH_DEFAULT_TASK_STRATEGY;    // 如果开启fair lock，则全部写入 pool的queue中，依次执行
+CBool UThreadPool::isInit() const {
+    return is_init_;
+}
+
+
+CStatus UThreadPool::releaseSecondaryThread(CInt size) {
+    CGRAPH_FUNCTION_BEGIN
+
+    // 先将所有已经结束的，给删掉
+    CGRAPH_LOCK_GUARD lock(st_mutex_);
+    for (auto iter = secondary_threads_.begin(); iter != secondary_threads_.end(); ) {
+        !(*iter)->done_ ? secondary_threads_.erase(iter++) : iter++;
     }
 
+    CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION((size > secondary_threads_.size()),    \
+                                            "cannot release [" + std::to_string(size) + "] secondary thread,"    \
+                                            + "only [" + std::to_string(secondary_threads_.size()) + "] left.")
+
+    // 再标记几个需要删除的信息
+    for (auto iter = secondary_threads_.begin();
+         iter != secondary_threads_.end() && size-- > 0; ) {
+        (*iter)->done_ = false;
+        iter++;
+    }
+    CGRAPH_FUNCTION_END
+}
+
+
+CIndex UThreadPool::dispatch(CIndex origIndex) {
     CIndex realIndex = 0;
     if (CGRAPH_DEFAULT_TASK_STRATEGY == origIndex) {
         /**
@@ -192,6 +209,8 @@ CStatus UThreadPool::createSecondaryThread(CInt size) {
 
     int leftSize = (int)(config_.max_thread_size_ - config_.default_thread_size_ - secondary_threads_.size());
     int realSize = std::min(size, leftSize);    // 使用 realSize 来确保所有的线程数量之和，不会超过设定max值
+
+    CGRAPH_LOCK_GUARD lock(st_mutex_);
     for (int i = 0; i < realSize; i++) {
         auto ptr = CGRAPH_MAKE_UNIQUE_COBJECT(UThreadSecondary)
         ptr->setThreadPoolInfo(&task_queue_, &priority_task_queue_, &config_);
@@ -204,21 +223,22 @@ CStatus UThreadPool::createSecondaryThread(CInt size) {
 
 
 CVoid UThreadPool::monitor() {
-    while (is_monitor_) {
-        while (is_monitor_ && !is_init_) {
+    while (config_.monitor_enable_) {
+        while (config_.monitor_enable_ && !is_init_) {
             // 如果没有init，则一直处于空跑状态
             CGRAPH_SLEEP_SECOND(1)
         }
 
         int span = config_.monitor_span_;
-        while (is_monitor_ && is_init_ && span--) {
+        while (config_.monitor_enable_ && is_init_ && span--) {
             CGRAPH_SLEEP_SECOND(1)    // 保证可以快速退出
         }
 
         // 如果 primary线程都在执行，则表示忙碌
-        bool busy = std::all_of(primary_threads_.begin(), primary_threads_.end(),
+        bool busy = !primary_threads_.empty() && std::all_of(primary_threads_.begin(), primary_threads_.end(),
                                 [](UThreadPrimaryPtr ptr) { return nullptr != ptr && ptr->is_running_; });
 
+        CGRAPH_LOCK_GUARD lock(st_mutex_);
         // 如果忙碌或者priority_task_queue_中有任务，则需要添加 secondary线程
         if (busy || !priority_task_queue_.empty()) {
             createSecondaryThread(1);
