@@ -46,18 +46,34 @@ public:
     }
 
     CSTATUS(const CSTATUS &status) {
+        if (status.isOK()) {
+            return;
+        }
+
         this->error_code_ = status.error_code_;
         this->error_info_ = status.error_info_;
         this->error_locate_ = status.error_locate_;
     }
 
     CSTATUS(const CSTATUS &&status) noexcept {
+        if (status.isOK()) {
+            return;
+        }
+
         this->error_code_ = status.error_code_;
         this->error_info_ = status.error_info_;
         this->error_locate_ = status.error_locate_;
     }
 
-    CSTATUS& operator=(const CSTATUS& status) = default;
+    CSTATUS& operator=(const CSTATUS& status) {
+        if (!status.isOK()) {
+            // 如果status是正常的话，则所有数据保持不变
+            this->error_code_ = status.error_code_;
+            this->error_info_ = status.error_info_;
+            this->error_locate_ = status.error_locate_;
+        }
+        return (*this);
+    }
 
     CSTATUS& operator+=(const CSTATUS& cur) {
         /**
