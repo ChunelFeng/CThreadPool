@@ -51,11 +51,14 @@ CStatus UThreadPool::init() {
     for (int i = 0; i < config_.default_thread_size_; i++) {
         auto ptr = CGRAPH_SAFE_MALLOC_COBJECT(UThreadPrimary);    // 创建核心线程数
         ptr->setThreadPoolInfo(i, &task_queue_, &primary_threads_, &config_);
-        status += ptr->init();
 
         // 记录线程和匹配id信息
         thread_record_map_[(CSize)std::hash<std::thread::id>{}(ptr->thread_.get_id())] = i;
         primary_threads_.emplace_back(ptr);
+    }
+
+    for (auto* pt : primary_threads_) {
+        status += pt->init();
     }
     CGRAPH_FUNCTION_CHECK_STATUS
 
