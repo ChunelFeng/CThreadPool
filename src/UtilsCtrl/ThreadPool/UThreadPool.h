@@ -102,6 +102,16 @@ public:
                    CGRAPH_CALLBACK_CONST_FUNCTION_REF onFinished = nullptr);
 
     /**
+     * 异步执行任务
+     * @tparam FunctionType
+     * @param task
+     * @param index
+     */
+    template<typename FunctionType>
+    void execute(const FunctionType& task,
+                 CIndex index = CGRAPH_DEFAULT_TASK_STRATEGY);
+
+    /**
      * 获取根据线程id信息，获取线程index信息
      * @param tid
      * @return
