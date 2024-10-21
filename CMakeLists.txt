@@ -7,7 +7,7 @@ message("* | |____      | |     | |      *")
 message("*  \\_____|     |_|     |_|      *")
 message("* * * * * * * * * * * * * * * * *")
 
-cmake_minimum_required(VERSION 3.2.5)
+cmake_minimum_required(VERSION 3.5.0)
 
 project(CThreadPool VERSION 1.2.1)
 
