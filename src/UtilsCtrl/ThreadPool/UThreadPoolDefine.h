@@ -51,7 +51,7 @@ static const int CGRAPH_LONG_TIME_TASK_STRATEGY = -101;                         
  */
 static const int CGRAPH_DEFAULT_THREAD_SIZE = 8;                                            // 默认开启主线程个数
 static const int CGRAPH_SECONDARY_THREAD_SIZE = 0;                                          // 默认开启辅助线程个数
-static const int CGRAPH_MAX_THREAD_SIZE = 16;                                               // 最大线程个数
+static const int CGRAPH_MAX_THREAD_SIZE = 8;                                                // 最大线程个数
 static const int CGRAPH_MAX_TASK_STEAL_RANGE = 7;                                           // 盗取机制相邻范围
 static const bool CGRAPH_BATCH_TASK_ENABLE = false;                                         // 是否开启批量任务功能
 static const int CGRAPH_MAX_LOCAL_BATCH_SIZE = 2;                                           // 批量执行本地任务最大值
@@ -62,7 +62,7 @@ static const CMSec CGRAPH_PRIMARY_THREAD_EMPTY_INTERVAL = 1000;                 
 static const int CGRAPH_SECONDARY_THREAD_TTL = 10;                                          // 辅助线程ttl，单位为s
 static const bool CGRAPH_MONITOR_ENABLE = false;                                            // 是否开启监控程序
 static const CSec CGRAPH_MONITOR_SPAN = 5;                                                  // 监控线程执行间隔，单位为s
-static const CMSec CGRAPH_QUEUE_EMPTY_INTERVAL = 3;                                         // 队列为空时，等待的时间。仅针对辅助线程，单位为ms
+static const CMSec CGRAPH_QUEUE_EMPTY_INTERVAL = 1000;                                      // 队列为空时，等待的时间。仅针对辅助线程，单位为ms
 static const bool CGRAPH_BIND_CPU_ENABLE = false;                                           // 是否开启绑定cpu模式（仅针对主线程）
 static const int CGRAPH_PRIMARY_THREAD_POLICY = CGRAPH_THREAD_SCHED_OTHER;                  // 主线程调度策略
 static const int CGRAPH_SECONDARY_THREAD_POLICY = CGRAPH_THREAD_SCHED_OTHER;                // 辅助线程调度策略

@@ -47,6 +47,7 @@ CStatus UThreadPool::init() {
 
     monitor_thread_ = std::move(std::thread(&UThreadPool::monitor, this));
     thread_record_map_.clear();
+    task_queue_.setup();
     primary_threads_.reserve(config_.default_thread_size_);
     for (int i = 0; i < config_.default_thread_size_; i++) {
         auto ptr = CGRAPH_SAFE_MALLOC_COBJECT(UThreadPrimary);    // 创建核心线程数
@@ -148,6 +149,7 @@ CStatus UThreadPool::destroy() {
     primary_threads_.clear();
 
     // secondary 线程是智能指针，不需要delete
+    task_queue_.reset();
     for (auto &st : secondary_threads_) {
         status += st->destroy();
     }
@@ -192,7 +194,7 @@ CIndex UThreadPool::dispatch(CIndex origIndex) {
     CIndex realIndex = 0;
     if (CGRAPH_DEFAULT_TASK_STRATEGY == origIndex) {
         realIndex = cur_index_++;
-        if (cur_index_ >= config_.default_thread_size_ || cur_index_ < 0) {
+        if (cur_index_ >= config_.max_thread_size_ || cur_index_ < 0) {
             cur_index_ = 0;
         }
     } else {
