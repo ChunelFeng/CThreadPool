@@ -16,7 +16,7 @@
 
 CGRAPH_NAMESPACE_BEGIN
 
-template<typename T, CInt CAPACITY = 32>
+template<typename T, CInt CAPACITY = CGRAPH_DEFAULT_RINGBUFFER_SIZE>
 class ULockFreeRingBufferQueue : public UQueueObject {
 public:
     explicit ULockFreeRingBufferQueue() {
@@ -39,7 +39,7 @@ public:
 
         while (nextTail == head_.load(std::memory_order_acquire)) {
             // 队列已满，等待其他线程出队
-            std::this_thread::yield();
+            CGRAPH_YIELD();
         }
 
         ring_buffer_[curTail] = std::move(value);

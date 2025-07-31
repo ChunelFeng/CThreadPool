@@ -21,31 +21,49 @@ class UWorkStealingQueue : public UQueueObject {
 public:
     /**
      * 向队列中写入信息
-     * @param task
+     * @param value
      */
-    CVoid push(T&& task) {
+    CVoid push(T&& value) {
         while (true) {
-            if (lock_.try_lock()) {
-                deque_.emplace_front(std::forward<T>(task));
-                lock_.unlock();
+            if (mutex_.try_lock()) {
+                deque_.emplace_back(std::forward<T>(value));
+                mutex_.unlock();
                 break;
             } else {
-                std::this_thread::yield();
+                CGRAPH_YIELD();
             }
         }
     }
 
 
     /**
-     * 尝试往队列里写入信息
-     * @param task
+     * 有条件的写入数据信息
+     * @param value
+     * @param enable
+     * @param state
      * @return
      */
-    CBool tryPush(T&& task) {
+    CVoid push(T&& value, CBool enable, CBool lockable) {
+        if (enable && lockable) {
+            mutex_.lock();
+        }
+        deque_.emplace_back(std::forward<T>(value));
+        if (enable && !lockable) {
+            mutex_.unlock();
+        }
+    }
+
+
+    /**
+     * 尝试往队列里写入信息
+     * @param value
+     * @return
+     */
+    CBool tryPush(T&& value) {
         CBool result = false;
-        if (lock_.try_lock()) {
-            deque_.emplace_back(std::forward<T>(task));
-            lock_.unlock();
+        if (mutex_.try_lock()) {
+            deque_.emplace_back(std::forward<T>(value));
+            mutex_.unlock();
             result = true;
         }
         return result;
@@ -54,56 +72,38 @@ public:
 
     /**
      * 向队列中写入信息
-     * @param task
+     * @param values
      */
-    CVoid push(std::vector<T>& tasks) {
+    CVoid push(const std::vector<T>& values) {
         while (true) {
-            if (lock_.try_lock()) {
-                for (const auto& task : tasks) {
-                    deque_.emplace_front(std::forward<T>(task));
+            if (mutex_.try_lock()) {
+                for (auto& value : values) {
+                    deque_.emplace_back(value);
                 }
-                lock_.unlock();
+                mutex_.unlock();
                 break;
             } else {
-                std::this_thread::yield();
+                CGRAPH_YIELD();
             }
         }
-    }
-
-
-    /**
-     * 尝试批量写入内容
-     * @param tasks
-     * @return
-     */
-    CBool tryPush(std::vector<T>& tasks) {
-        CBool result = false;
-        if (lock_.try_lock()) {
-            for (const auto& task : tasks) {
-                deque_.emplace_back(std::forward<T>(task));
-            }
-            lock_.unlock();
-            result = true;
-        }
-        return result;
     }
 
 
     /**
      * 弹出节点，从头部进行
-     * @param task
+     * @param value
      * @return
      */
-    CBool tryPop(T& task) {
+    CBool tryPop(T& value) {
         // 这里不使用raii锁，主要是考虑到多线程的情况下，可能会重复进入
         bool result = false;
-        if (!deque_.empty() && lock_.try_lock()) {
+        if (!deque_.empty() && mutex_.try_lock()) {
             if (!deque_.empty()) {
-                task = std::forward<T>(deque_.front());    // 从前方弹出
+                value = std::forward<T>(deque_.front());    // 从前方弹出
                 deque_.pop_front();
                 result = true;
             }
-            lock_.unlock();
+            mutex_.unlock();
         }
 
         return result;
@@ -112,19 +112,19 @@ public:
 
     /**
      * 从头部开始批量获取可执行任务信息
-     * @param taskArr
+     * @param values
      * @param maxLocalBatchSize
      * @return
      */
-    CBool tryPop(std::vector<T>& taskArr, int maxLocalBatchSize) {
+    CBool tryPop(std::vector<T>& values, int maxLocalBatchSize) {
         bool result = false;
-        if (!deque_.empty() && lock_.try_lock()) {
+        if (!deque_.empty() && mutex_.try_lock()) {
             while (!deque_.empty() && maxLocalBatchSize--) {
-                taskArr.emplace_back(std::forward<T>(deque_.front()));
+                values.emplace_back(std::forward<T>(deque_.front()));
                 deque_.pop_front();
                 result = true;
             }
-            lock_.unlock();
+            mutex_.unlock();
         }
 
         return result;
@@ -136,15 +136,15 @@ public:
      * @param task
      * @return
      */
-    CBool trySteal(T& task) {
+    CBool trySteal(T& value) {
         bool result = false;
-        if (!deque_.empty() && lock_.try_lock()) {
+        if (!deque_.empty() && mutex_.try_lock()) {
             if (!deque_.empty()) {
-                task = std::forward<T>(deque_.back());    // 从后方窃取
+                value = std::forward<T>(deque_.back());    // 从后方窃取
                 deque_.pop_back();
                 result = true;
             }
-            lock_.unlock();
+            mutex_.unlock();
         }
 
         return result;
@@ -153,18 +153,18 @@ public:
 
     /**
      * 批量窃取节点，从尾部进行
-     * @param taskArr
+     * @param values
      * @return
      */
-    CBool trySteal(std::vector<T>& taskArr, int maxStealBatchSize) {
+    CBool trySteal(std::vector<T>& values, int maxStealBatchSize) {
         bool result = false;
-        if (!deque_.empty() && lock_.try_lock()) {
+        if (!deque_.empty() && mutex_.try_lock()) {
             while (!deque_.empty() && maxStealBatchSize--) {
-                taskArr.emplace_back(std::forward<T>(deque_.back()));
+                values.emplace_back(std::forward<T>(deque_.back()));
                 deque_.pop_back();
                 result = true;
             }
-            lock_.unlock();
+            mutex_.unlock();
         }
 
         return result;    // 如果非空，表示盗取成功
@@ -176,7 +176,6 @@ public:
 
 private:
     std::deque<T> deque_;            // 存放任务的双向队列
-    std::mutex lock_;                // 用于处理deque_的锁
 };
 
 CGRAPH_NAMESPACE_END

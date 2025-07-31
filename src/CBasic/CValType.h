@@ -14,7 +14,7 @@
 #include "CException.h"
 
 using CChar = CTP::CCHAR;
-using CUint = CTP::CUINT;
+using CUInt = CTP::CUINT;
 using CSize = CTP::CSIZE;
 using CVoid = CTP::CVOID;
 using CVoidPtr = CTP::CVOID *;

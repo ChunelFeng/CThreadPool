@@ -15,37 +15,12 @@
 #include <ctime>
 #include <cstdarg>
 #include <algorithm>
+#include <thread>
+#include <chrono>
 
 #include "../CBasic/CBasicInclude.h"
 
 CGRAPH_NAMESPACE_BEGIN
-
-/**
- * 定制化输出
- * @param cmd
- * @param ...
- * 注：内部包含全局锁，不建议正式上线的时候使用
- */
-static std::mutex g_echo_mtx;
-inline CVoid CGRAPH_ECHO(const char *cmd, ...) {
-#ifdef _CGRAPH_SILENCE_
-    return;
-#endif
-
-    std::lock_guard<std::mutex> lock{ g_echo_mtx };
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
-    std::cout << "[" << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S.")    \
-        << std::setfill('0') << std::setw(3) << ms << "] ";
-
-    va_list args;
-    va_start(args, cmd);
-    vprintf(cmd, args);
-    va_end(args);
-    std::cout << "\n";
-}
-
 
 /**
  * 获取当前的ms信息
@@ -132,6 +107,25 @@ T CGRAPH_SUM(T t) {
 template<typename T, typename... Args>
 T CGRAPH_SUM(T val, Args... args) {
     return val + CGRAPH_SUM(args...);
+}
+
+
+/**
+ * 模拟的yield操作，兼容了 sleep 和 yield 两种情况
+ * 考虑到yield 在不同的os中，会有不同的实现方式，提供不同实现版本的yield方法
+ * @return
+ */
+inline CVoid CGRAPH_YIELD() {
+#ifdef _CGRAPH_SLEEP_MS_AS_YIELD_
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#elif _CGRAPH_SLEEP_US_AS_YIELD_
+    std::this_thread::sleep_for(std::chrono::microseconds(1));
+#elif _CGRAPH_SLEEP_NS_AS_YIELD_
+    std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+#else
+    // 默认情况下，还是直接调用系统的yield
+    std::this_thread::yield();
+#endif
 }
 
 CGRAPH_NAMESPACE_END

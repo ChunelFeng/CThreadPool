@@ -21,21 +21,19 @@ auto UThreadPool::commit(const FunctionType& func, CIndex index)
     std::packaged_task<ResultType()> task(func);
     std::future<ResultType> result(task.get_future());
 
-    CIndex realIndex = dispatch(index);
-    if (realIndex >= 0 && realIndex < config_.default_thread_size_) {
-        // 如果返回的结果，在主线程数量之间，则放到主线程的queue中执行
-        primary_threads_[realIndex]->pushTask(std::move(task));
-    } else if (CGRAPH_LONG_TIME_TASK_STRATEGY == realIndex) {
-        /**
-         * 如果是长时间任务，则交给特定的任务队列，仅由辅助线程处理
-         * 目的是防止有很多长时间任务，将所有运行的线程均阻塞
-         * 长任务程序，默认优先级较低
-         **/
-        priority_task_queue_.push(std::move(task), CGRAPH_LONG_TIME_TASK_STRATEGY);
-    } else {
-        // 返回其他结果，放到pool的queue中执行
-        task_queue_.push(std::move(task));
-    }
+    execute(std::move(task), index);
+    return result;
+}
+
+
+template<typename FunctionType>
+auto UThreadPool::commitWithTid(const FunctionType& func, CIndex tid, CBool enable, CBool lockable)
+-> std::future<decltype(std::declval<FunctionType>()())> {
+    using ResultType = decltype(std::declval<FunctionType>()());
+    std::packaged_task<ResultType()> task(std::move(func));
+    std::future<ResultType> result(task.get_future());
+
+    execute(std::move(task), tid, enable, lockable);
     return result;
 }
 
@@ -58,15 +56,25 @@ auto UThreadPool::commitWithPriority(const FunctionType& func, int priority)
 
 
 template<typename FunctionType>
-void UThreadPool::execute(const FunctionType& task, CIndex index) {
+CVoid UThreadPool::execute(FunctionType&& task, CIndex index) {
     CIndex realIndex = dispatch(index);
     if (realIndex >= 0 && realIndex < config_.default_thread_size_) {
-        primary_threads_[realIndex]->pushTask(std::move(task));
+        primary_threads_[realIndex]->pushTask(std::forward<FunctionType>(task));
     } else if (CGRAPH_LONG_TIME_TASK_STRATEGY == realIndex) {
-        priority_task_queue_.push(std::move(task), CGRAPH_LONG_TIME_TASK_STRATEGY);
+        priority_task_queue_.push(std::forward<FunctionType>(task), CGRAPH_LONG_TIME_TASK_STRATEGY);
     } else {
-        // 返回其他结果，放到pool的queue中执行
-        task_queue_.push(std::move(task));
+        task_queue_.push(std::forward<FunctionType>(task));
+    }
+}
+
+
+template<typename FunctionType>
+CVoid UThreadPool::executeWithTid(FunctionType&& task, CIndex tid, CBool enable, CBool lockable) {
+    if (likely(tid >= 0 && tid < config_.default_thread_size_)) {
+        primary_threads_[tid]->pushTask(std::forward<FunctionType>(task), enable, lockable);
+    } else {
+        // 如果超出主线程的范围，则默认写入 pool 通用的任务队列中
+        task_queue_.push(std::forward<FunctionType>(task));
     }
 }
 

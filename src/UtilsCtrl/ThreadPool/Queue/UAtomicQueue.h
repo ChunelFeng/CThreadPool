@@ -87,6 +87,7 @@ public:
                           [this] { return (!queue_.empty()) || (!ready_flag_); })) {
             return nullptr;
         }
+
         if (queue_.empty() || !ready_flag_) {
             return nullptr;
         }
@@ -123,7 +124,7 @@ public:
                 mutex_.unlock();
                 break;
             } else {
-                std::this_thread::yield();
+                CGRAPH_YIELD();
             }
         }
         cv_.notify_one();
@@ -139,6 +140,7 @@ public:
         return queue_.empty();
     }
 
+
     /**
      * 功能是通知所有的辅助线程停止工作
      * @return
@@ -147,6 +149,7 @@ public:
         ready_flag_ = false;
         cv_.notify_all();
     }
+
 
     /**
      * 初始化状态
@@ -160,7 +163,7 @@ public:
     CGRAPH_NO_ALLOWED_COPY(UAtomicQueue)
 
 private:
-    std::queue<std::unique_ptr<T>> queue_;       // 任务队列
+    std::queue<std::unique_ptr<T>> queue_ {};    // 任务队列
     CBool ready_flag_ { true };                  // 执行标记，主要用于快速释放 destroy 逻辑中，多个辅助线程等待的状态
 };
 

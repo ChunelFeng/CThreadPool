@@ -29,7 +29,7 @@ protected:
 
         cur_ttl_ = config_->secondary_thread_ttl_;
         is_init_ = true;
-        thread_ = std::move(std::thread(&UThreadSecondary::run, this));
+        thread_ = std::thread(&UThreadSecondary::run, this);
         setSchedParam();
         CGRAPH_FUNCTION_END
     }
@@ -60,7 +60,7 @@ protected:
         CGRAPH_FUNCTION_BEGIN
         CGRAPH_ASSERT_INIT(true)
 
-        status = loopProcess();
+        loopProcess();
         CGRAPH_FUNCTION_END
     }
 
@@ -95,7 +95,7 @@ protected:
     CVoid waitRunTask(CMSec ms) {
         auto task = this->pool_task_queue_->popWithTimeout(ms);
         if (nullptr != task) {
-            (*task)();
+            runTask(*task);
         }
     }
 
@@ -107,7 +107,7 @@ protected:
     bool freeze() {
         if (likely(is_running_)) {
             cur_ttl_++;
-            cur_ttl_ = std::min(cur_ttl_, config_->secondary_thread_ttl_);
+            cur_ttl_ = (std::min)(cur_ttl_, config_->secondary_thread_ttl_);
         } else {
             cur_ttl_--;    // 如果当前线程没有在执行，则ttl-1
         }
@@ -116,7 +116,7 @@ protected:
     }
 
 private:
-    int cur_ttl_ = 0;                                                      // 当前最大生存周期
+    CSec cur_ttl_ = 0;                                                      // 当前最大生存周期
 
     friend class UThreadPool;
 };

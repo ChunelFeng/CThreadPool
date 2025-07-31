@@ -32,7 +32,7 @@ protected:
 
         is_init_ = true;
         buildStealTargets();
-        thread_ = std::move(std::thread(&UThreadPrimary::run, this));
+        thread_ = std::thread(&UThreadPrimary::run, this);
         setSchedParam();
         setAffinity(index_);
         CGRAPH_FUNCTION_END
@@ -83,14 +83,14 @@ protected:
             CGRAPH_RETURN_ERROR_STATUS("primary thread is null")
         }
 
-        status = loopProcess();
+        loopProcess();
         CGRAPH_FUNCTION_END
     }
 
 
     CVoid processTask() override {
         UTask task;
-        if (popTask(task) || popPoolTask(task) || stealTask(task)) {
+        if (popTask(task) || stealTask(task) || popPoolTask(task)) {
             runTask(task);
         } else {
             fatWait();
@@ -100,7 +100,7 @@ protected:
 
     CVoid processTasks() override {
         UTaskArr tasks;
-        if (popTask(tasks) || popPoolTask(tasks) || stealTask(tasks)) {
+        if (popTask(tasks) || stealTask(tasks) || popPoolTask(tasks)) {
             // 尝试从主线程中获取/盗取批量task，如果成功，则依次执行
             runTasks(tasks);
         } else {
@@ -111,11 +111,11 @@ protected:
 
     /**
      * 如果总是进入无task的状态，则开始休眠
-     * 休眠一定时间后，然后恢复执行状态，避免出现
+     * 休眠一定时间后，然后恢复执行状态，避免出现异常情况导致无法唤醒
      */
     CVoid fatWait() {
         cur_empty_epoch_++;
-        std::this_thread::yield();
+        CGRAPH_YIELD();
         if (cur_empty_epoch_ >= config_->primary_thread_busy_epoch_) {
             CGRAPH_UNIQUE_LOCK lk(mutex_);
             cv_.wait_for(lk, std::chrono::milliseconds(config_->primary_thread_empty_interval_));
@@ -132,9 +132,26 @@ protected:
     CVoid pushTask(UTask&& task) {
         while (!(primary_queue_.tryPush(std::move(task))
                  || secondary_queue_.tryPush(std::move(task)))) {
-            std::this_thread::yield();
+            CGRAPH_YIELD();
         }
+        cur_empty_epoch_ = 0;
         cv_.notify_one();
+    }
+
+
+    /**
+     * 写入 task信息，是否上锁由
+     * @param task
+     * @param enable 确认是否有
+     * @param lockable true 的时候需要上锁，false 的时候会解锁
+     * @return
+     */
+    CVoid pushTask(UTask&& task, CBool enable, CBool lockable) {
+        secondary_queue_.push(std::move(task), enable, lockable);    // 通过 second 写入，主要是方便其他的thread 进行steal操作
+        if (enable && !lockable) {
+            cur_empty_epoch_ = 0;
+            cv_.notify_one();
+        }
     }
 
 
@@ -143,8 +160,9 @@ protected:
      * @param task
      * @return
      */
-    bool popTask(UTaskRef task) {
-        return primary_queue_.tryPop(task) || secondary_queue_.tryPop(task);
+    CBool popTask(UTaskRef task) {
+        auto result = primary_queue_.tryPop(task) || secondary_queue_.tryPop(task);
+        return result;
     }
 
 
@@ -153,7 +171,7 @@ protected:
      * @param tasks
      * @return
      */
-    bool popTask(UTaskArrRef tasks) {
+    CBool popTask(UTaskArrRef tasks) {
         CBool result = primary_queue_.tryPop(tasks, config_->max_local_batch_size_);
         auto leftSize = config_->max_local_batch_size_ - tasks.size();
         if (leftSize > 0) {
@@ -169,8 +187,8 @@ protected:
      * @param task
      * @return
      */
-    bool stealTask(UTaskRef task) {
-        if (unlikely(pool_threads_->size() < config_->default_thread_size_)) {
+    CBool stealTask(UTaskRef task) {
+        if (unlikely(pool_threads_->size() < (CSize)(config_->default_thread_size_))) {
             /**
              * 线程池还未初始化完毕的时候，无法进行steal。
              * 确保程序安全运行。
@@ -182,6 +200,7 @@ protected:
          * 窃取的时候，仅从相邻的primary线程中窃取
          * 待窃取相邻的数量，不能超过默认primary线程数
          */
+        CBool result = false;
         for (auto& target : steal_targets_) {
             /**
             * 从线程中周围的thread中，窃取任务。
@@ -189,13 +208,14 @@ protected:
              * steal 的时候，先从第二个队列里偷，从而降低触碰锁的概率
             */
             if (likely((*pool_threads_)[target])
-                && (((*pool_threads_)[target])->secondary_queue_.trySteal(task))
-                    || ((*pool_threads_)[target])->primary_queue_.trySteal(task)) {
-                return true;
+                && (((*pool_threads_)[target])->secondary_queue_.trySteal(task)
+                    || ((*pool_threads_)[target])->primary_queue_.trySteal(task))) {
+                result = true;
+                break;
             }
         }
 
-        return false;
+        return result;
     }
 
 
@@ -204,14 +224,15 @@ protected:
      * @param tasks
      * @return
      */
-    bool stealTask(UTaskArrRef tasks) {
-        if (unlikely(pool_threads_->size() != config_->default_thread_size_)) {
+    CBool stealTask(UTaskArrRef tasks) {
+        if (unlikely(pool_threads_->size() != (CSize)(config_->default_thread_size_))) {
             return false;
         }
 
+        CBool result = false;
         for (auto& target : steal_targets_) {
             if (likely((*pool_threads_)[target])) {
-                bool result = ((*pool_threads_)[target])->secondary_queue_.trySteal(tasks, config_->max_steal_batch_size_);
+                result = ((*pool_threads_)[target])->secondary_queue_.trySteal(tasks, config_->max_steal_batch_size_);
                 auto leftSize = config_->max_steal_batch_size_ - tasks.size();
                 if (leftSize > 0) {
                     result |= ((*pool_threads_)[target])->primary_queue_.trySteal(tasks, leftSize);
@@ -224,12 +245,12 @@ protected:
                      * 如果从某一个邻居中，获取了 y(<=x) 个task，则也终止steal的流程
                      * 且如果如果有一次批量steal成功，就认定成功
                      */
-                    return true;
+                    break;
                 }
             }
         }
 
-        return false;
+        return result;
     }
 
 
@@ -247,18 +268,15 @@ protected:
     }
 
 private:
-    int index_;                                                    // 线程index
-    int cur_empty_epoch_ = 0;                                      // 当前空转的轮数信息
+    CInt index_;                                                   // 线程index
+    CInt cur_empty_epoch_ = 0;                                     // 当前空转的轮数信息
     UWorkStealingQueue<UTask> primary_queue_;                      // 内部队列信息
     UWorkStealingQueue<UTask> secondary_queue_;                    // 第二个队列，用于减少触锁概率，提升性能
     std::vector<UThreadPrimary *>* pool_threads_;                  // 用于存放线程池中的线程信息
-    std::vector<int> steal_targets_;                               // 被偷的目标信息
-
-    std::mutex mutex_;
-    std::condition_variable cv_;
+    std::vector<CInt> steal_targets_;                              // 被偷的目标信息
 
     friend class UThreadPool;
-    friend class UAllocator;
+    friend class CAllocator;
 };
 
 using UThreadPrimaryPtr = UThreadPrimary *;

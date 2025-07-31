@@ -52,15 +52,9 @@ enum class CFunctionType {
     + " | line = [" + ::std::to_string( __LINE__) + "]")
 
 
-/** 生成一个包含异常位置的 CStatus
- * 这里这样实现，是为了符合 CStatus 类似写法
- * */
-#define CErrStatus(info)                                                \
-    CStatus(info, CGRAPH_GET_LOCATE)                                    \
-
 /** 返回异常信息和状态 */
 #define CGRAPH_RETURN_ERROR_STATUS(info)                                \
-    return CErrStatus(info);                                            \
+    return CStatus(info);                                               \
 
 /** 根据条件判断是否返回错误状态 */
 #define CGRAPH_RETURN_ERROR_STATUS_BY_CONDITION(cond, info)             \
@@ -68,7 +62,7 @@ enum class CFunctionType {
 
 /** 不支持当前功能 */
 #define CGRAPH_NO_SUPPORT                                               \
-    return CErrStatus(CGRAPH_FUNCTION_NO_SUPPORT);                      \
+    return CStatus(CGRAPH_FUNCTION_NO_SUPPORT);                         \
 
 /** 定义为不能赋值和拷贝的对象类型 */
 #define CGRAPH_NO_ALLOWED_COPY(CType)                                   \
@@ -82,13 +76,11 @@ enum class CFunctionType {
 /** 在异常状态的情况下，抛出异常 */
 #define CGRAPH_THROW_EXCEPTION_BY_STATUS(status)                        \
     if (unlikely((status).isErr())) {                                   \
-        CGRAPH_THROW_EXCEPTION((status).getInfo());                     \
-    }                                                                   \
+        CGRAPH_THROW_EXCEPTION((status).getInfo()); }                   \
 
 /** 根据条件判断是否抛出异常 */
 #define CGRAPH_THROW_EXCEPTION_BY_CONDITION(cond, info)                 \
     if (unlikely(cond)) { CGRAPH_THROW_EXCEPTION(info); }               \
-
 
 CGRAPH_NAMESPACE_END
 
